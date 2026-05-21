@@ -1,6 +1,5 @@
 FROM node:20-slim
 
-# Install Playwright/Chromium dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -33,11 +32,16 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
+# Install ALL deps (including devDeps for tsc)
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
+# Copy source and build
 COPY . .
 RUN npm run build
+
+# Remove devDeps after build to slim image
+RUN npm prune --omit=dev
 
 RUN mkdir -p logs
 
