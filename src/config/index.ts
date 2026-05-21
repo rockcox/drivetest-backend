@@ -45,7 +45,7 @@ export const config = {
   },
 
   captcha: {
-    apiKey: required('CAPTCHA_API_KEY'),
+    apiKey: optional('CAPTCHA_API_KEY', ''),
     solveTimeoutMs: 60_000,
   },
 

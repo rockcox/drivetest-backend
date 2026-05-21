@@ -57,13 +57,17 @@ export async function completeBooking(
       await clickDelay()
     }
 
-    // Solve CAPTCHA before final submit
-    l.info('Solving CAPTCHA')
+    // Handle CAPTCHA if present (stealth browser usually avoids it entirely)
     const captchaSiteKey = await extractCaptchaSiteKey(page)
     if (captchaSiteKey) {
+      l.warn('reCAPTCHA detected — attempting submit without token (stealth mode)')
       const token = await solveCaptcha(captchaSiteKey, page.url())
-      await injectCaptchaToken(page, token)
-      await randomDelay(500, 1000)
+      if (token) {
+        await injectCaptchaToken(page, token)
+        await randomDelay(500, 1000)
+      }
+    } else {
+      l.info('No CAPTCHA detected — proceeding to submit')
     }
 
     // Submit payment
