@@ -1,20 +1,30 @@
-import twilio from 'twilio'
 import { config } from '../config'
 import { childLogger } from '../utils/logger'
 
 const log = childLogger('service:sms')
-const client = twilio(config.twilio.accountSid, config.twilio.authToken)
+
+// Lazily initialise Twilio only if real credentials exist
+function getClient() {
+  const sid = config.twilio.accountSid
+  const token = config.twilio.authToken
+  if (!sid || sid.startsWith('AC') === false || sid.includes('placeholder')) {
+    return null
+  }
+  const twilio = require('twilio')
+  return twilio(sid, token)
+}
 
 const MAX_SMS_LENGTH = 160
 
-/**
- * Send an SMS to a Canadian phone number.
- */
 export async function sendSMS(to: string, body: string): Promise<string> {
+  const client = getClient()
+  if (!client) {
+    log.warn(`SMS skipped (no Twilio credentials) — would have sent to ${maskPhone(to)}: "${body.slice(0, 60)}..."`)
+    return 'sms-skipped'
+  }
+
   const normalizedTo = normalizePhone(to)
-  const trimmedBody = body.length > MAX_SMS_LENGTH
-    ? body.slice(0, MAX_SMS_LENGTH - 3) + '...'
-    : body
+  const trimmedBody = body.length > MAX_SMS_LENGTH ? body.slice(0, MAX_SMS_LENGTH - 3) + '...' : body
 
   try {
     const msg = await client.messages.create({
@@ -26,41 +36,30 @@ export async function sendSMS(to: string, body: string): Promise<string> {
     return msg.sid
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    log.error('SMS send failed', { error: message, to: maskPhone(normalizedTo) })
-    throw err
+    log.error('SMS send failed — continuing without SMS', { error: message, to: maskPhone(normalizedTo) })
+    return 'sms-failed'  // Don't throw — SMS failure should never block a booking
   }
 }
 
-/**
- * Send "slot found" SMS with confirmation link.
- */
 export async function sendSlotFoundSMS(
   phone: string,
   slot: { location: string; date: string; time: string; order_id: string; slot_id: string }
 ): Promise<string> {
-  const confirmUrl = `${process.env.APP_URL}/order/${slot.order_id}/confirm/${slot.slot_id}`
-  const formattedDate = formatDate(slot.date)
-  const formattedTime = formatTime(slot.time)
-
-  const body = `DriveSlot: Slot found — ${slot.location} on ${formattedDate} at ${formattedTime}. Confirm in 2 hrs: ${confirmUrl}`
+  const confirmUrl = `${config.app.url}/status/${slot.order_id}`
+  const body = `AppointMe: Slot found — ${slot.location} on ${formatDate(slot.date)} at ${formatTime(slot.time)}. Confirm: ${confirmUrl}`
   return sendSMS(phone, body)
 }
 
-/**
- * Send weekly "still searching" update SMS.
- */
 export async function sendWeeklyUpdateSMS(
   phone: string,
   orderId: string,
   testClass: string,
   scanCount: number
 ): Promise<string> {
-  const statusUrl = `${process.env.APP_URL}/order/${orderId}`
-  const body = `DriveSlot: We've checked ${scanCount.toLocaleString()} times for your ${testClass} test. Still on it! Track: ${statusUrl}`
+  const statusUrl = `${config.app.url}/status/${orderId}`
+  const body = `AppointMe: Checked ${scanCount.toLocaleString()}x for your ${testClass} test. Still searching. Track: ${statusUrl}`
   return sendSMS(phone, body)
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')

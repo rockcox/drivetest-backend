@@ -4,7 +4,12 @@ import { childLogger } from '../utils/logger'
 import type { FoundSlot, Booking, Order } from '../types'
 
 const log = childLogger('service:email')
-const resend = new Resend(config.resend.apiKey)
+function getResend() {
+  const key = config.resend.apiKey
+  if (!key || key.includes("placeholder") || key === "re_xxx") return null
+  const { Resend } = require("resend")
+  return new Resend(key)
+}
 
 export interface EmailPayload {
   subject: string
@@ -16,7 +21,14 @@ export interface EmailPayload {
  * Send a transactional email via Resend.
  */
 export async function sendEmail(to: string, payload: EmailPayload): Promise<string> {
+  const resend = getResend()
   const html = renderTemplate(payload.template, payload.data)
+
+  if (!resend) {
+    log.warn(`Email skipped (no Resend key) — would have sent "${payload.subject}" to ${to}`)
+    log.info(`--- EMAIL PREVIEW ---\nTo: ${to}\nSubject: ${payload.subject}\nTemplate: ${payload.template}\n--- END PREVIEW ---`)
+    return 'email-skipped'
+  }
 
   try {
     const { data, error } = await resend.emails.send({
@@ -31,8 +43,8 @@ export async function sendEmail(to: string, payload: EmailPayload): Promise<stri
     return data?.id ?? ''
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    log.error('Email send failed', { error: message, template: payload.template })
-    throw err
+    log.error('Email send failed — continuing', { error: message, template: payload.template })
+    return 'email-failed'  // Don't throw — email failure should never block a booking
   }
 }
 

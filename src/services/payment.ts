@@ -5,10 +5,26 @@ import { childLogger } from '../utils/logger'
 
 const log = childLogger('service:payment')
 
-export const stripe = new Stripe(config.stripe.secretKey, {
-  apiVersion: '2024-06-20',
-  typescript: true,
-})
+function initStripe() {
+  const key = config.stripe.secretKey
+  if (!key || key.includes('placeholder') || key === 'sk_test_placeholder') {
+    throw new Error(
+      'Stripe secret key not configured. ' +
+      'Add STRIPE_SECRET_KEY (starts with sk_test_ for test mode) to Railway environment variables. ' +
+      'Get it from: https://dashboard.stripe.com/test/apikeys'
+    )
+  }
+  return new Stripe(key, { apiVersion: '2024-06-20', typescript: true })
+}
+
+export const stripe = initStripe()
+
+// Test mode detection — logged at startup for clarity
+const isTestMode = config.stripe.secretKey.startsWith('sk_test_')
+if (isTestMode) {
+  const log2 = childLogger('service:payment')
+  log2.info('Stripe running in TEST MODE — use card 4242 4242 4242 4242 for testing')
+}
 
 // ─── Customer management ──────────────────────────────────────────────────────
 
