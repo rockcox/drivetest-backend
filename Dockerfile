@@ -1,9 +1,8 @@
 FROM node:20-slim
 
-# Install Playwright dependencies
+# Install Playwright/Chromium dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
-    chromium-driver \
     fonts-liberation \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -29,14 +28,13 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Use system Chromium instead of downloading
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 COPY . .
 RUN npm run build
