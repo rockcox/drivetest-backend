@@ -17,7 +17,7 @@ export const ordersRouter = Router()
 const CreateOrderSchema = z.object({
   email: z.string().email(),
   phone: z.string().min(10).max(15),
-  licenceNumber: z.string().min(6).max(20),
+  licenceNumber: z.string().min(6).max(20).regex(/^[A-Z0-9 -]*$/, 'Invalid licence format').transform(s => s.trim().toUpperCase()),
   licenceExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   testClass: z.enum(['G', 'G2', 'M', 'M2', 'A', 'AZ', 'B', 'C', 'D', 'F']),
   locations: z.array(z.string()).min(1).max(20),
